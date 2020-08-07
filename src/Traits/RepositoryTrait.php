@@ -314,6 +314,10 @@ trait RepositoryTrait
             $data['address'] = resolve('AddressService')->prepareData($data['address']);
             $obj->addresses()->create($data['address']);
         }
+        
+        if (isset($data['users'])) {
+            $obj->users()->sync($data['users']);
+        }
 
         if (isset($data['options'])) {
             $obj->options()->sync($data['options']);
