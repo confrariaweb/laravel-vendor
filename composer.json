@@ -19,6 +19,7 @@
         "files": [
             "src/Helpers/percent.php",
             "src/Helpers/integrations.php",
+            "src/Helpers/exists_account.php",
             "src/Helpers/is_json.php",
             "src/Helpers/schedule_observer.php",
             "src/Helpers/task.php",
