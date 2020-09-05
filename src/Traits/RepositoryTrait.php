@@ -121,6 +121,15 @@ trait RepositoryTrait
         return $this->obj->find($id);
     }
 
+    public function findOrFail($id)
+    {
+        if (!property_exists($this, 'obj')) {
+            Log::error('Missing OBJ attribute in EloquentTraitfindOrFail');
+            throw new RuntimeException('Missing OBJ attribute in EloquentTraitfindOrFail');
+        }
+        return $this->obj->findOrFail($id);
+    }
+
     public function pluck($field = 'name', $id = 'id')
     {
         if (!property_exists($this, 'obj')) {
@@ -148,11 +157,11 @@ trait RepositoryTrait
             ->when(in_array($field, $this->obj->getFillable()), function ($query) use ($field, $value) {
                 return $query->where($this->obj->getTable() . '.' . $field, $value);
             })
-            ->when(Str::contains($field, 'option.'), function ($query) use ($field, $value) {
+            /*->when(Str::contains($field, 'option.'), function ($query) use ($field, $value) {
                 return $query->whereHas('optionsValues', function (Builder $query) use ($value) {
                     $query->where('optiongables.content', $value);
                 });
-            })
+            })*/
             ->when(Str::contains($field, 'contact.'), function ($query) use ($field, $value) {
                 return $query->whereHas('contacts', function (Builder $query) use ($value) {
                     $query->where('contacts.content', $value);
@@ -292,10 +301,11 @@ trait RepositoryTrait
         if (!property_exists($this, 'obj')) {
             throw new RuntimeException('Missing OBJ attribute');
         }
-
+        /*
         if (isset($data['optionsValues'])) {
             $obj->optionsValues()->sync($data['optionsValues']);
         }
+        */
     }
 
     protected function syncWithoutDetaching($obj, array $data)
@@ -318,15 +328,16 @@ trait RepositoryTrait
         if (isset($data['users'])) {
             $obj->users()->sync($data['users']);
         }
-
+        /*
         if (isset($data['options'])) {
             $obj->options()->sync($data['options']);
         }
-
+        */
+        /*
         if (isset($data['optionsValues'])) {
             $obj->optionsValues()->sync($data['optionsValues']);
         }
-
+        */
         if (isset($data['integrations'])) {
             $obj->integrations()->attach($data['integrations']);
         }

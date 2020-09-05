@@ -33,7 +33,7 @@ trait ServiceTrait
         return $this;
     }
 
-    public function withoutGlobalScopes($scopes)
+    public function withoutGlobalScopes($scopes = NULL)
     {
         $this->obj = $this->obj->withoutGlobalScopes($scopes);
         return $this;
@@ -106,6 +106,20 @@ trait ServiceTrait
         }
         try {
             return $this->obj->find($id);
+        } catch (Exception $e) {
+            Log::error($e->getMessage());
+        }
+        return false;
+    }
+
+    function findOrFail($id)
+    {
+        if (!property_exists($this, 'obj')) {
+            Log::error('Missing OBJ attribute in ServiceTraitfindOrFail');
+            throw new RuntimeException('Missing OBJ attribute in ServiceTraitfindOrFail');
+        }
+        try {
+            return $this->obj->findOrFail($id);
         } catch (Exception $e) {
             Log::error($e->getMessage());
         }
@@ -483,19 +497,22 @@ trait ServiceTrait
      * @param array $data
      * @return mixed
      */
+    /*
     protected function formatOptionsForRelationships(array $data)
     {
         return resolve('OptionService')->formatOptionsForRelationships($data);
     }
-
+    */
     /**
      * @param array $data
      * @return mixed
      */
+    /*
     protected function encodeOptions(array $data)
     {
         return resolve('OptionService')->encodeOptions($data);
     }
+    */
 
     /**
      * @param $data
@@ -503,18 +520,22 @@ trait ServiceTrait
      */
     protected function prepareRelationships($data)
     {
+        /*
         if (isset($data['sync']['options'])) {
             $data['sync']['options'] = $data['sync']['options'];
             //$data['sync']['options'] = $this->formatOptionsForRelationships(isset($data['sync']['options']) ? $data['sync']['options'] : []);
         }
-
+        */
+        /*
         if (isset($data['syncWithoutDetaching']['optionsValues'])) {
             $data['syncWithoutDetaching']['optionsValues'] = $this->formatOptionsForRelationships(isset($data['syncWithoutDetaching']['optionsValues']) ? $data['syncWithoutDetaching']['optionsValues'] : []);
         }
-
+        */
+        /*
         if (isset($data['sync']['optionsValues'])) {
             $data['sync']['optionsValues'] = $this->formatOptionsForRelationships(isset($data['sync']['optionsValues']) ? $data['sync']['optionsValues'] : []);
         }
+        */
 
         if (isset($data['attach']['address'])) {
             $data['attach']['address'] = $this->prepareAddress(isset($data['attach']['address']) ? $data['attach']['address'] : []);
