@@ -4,30 +4,30 @@ namespace ConfrariaWeb\Vendor\Components;
 
 use Illuminate\View\Component;
 
-class Alert extends Component
+class CrudButtons extends Component
 {
 
-    public $type;
-    public $message;
+    public $id;
+    public $routeName;
 
     /**
      * Create a new component instance.
      *
      * @return void
      */
-    public function __construct($type = NULL, $message = NULL)
+    public function __construct($id, $routeName)
     {
-        $this->type = $type;
-        $this->message = $message;
+        $this->id = $id;
+        $this->routeName = $routeName;
     }
 
     /**
      * Get the view / contents that represent the component.
      *
-     * @return \Illuminate\View\View|string
+     * @return \Illuminate\Contracts\View\View|string
      */
     public function render()
     {
-        return view('cwVendor::components.alert');
+        return view('cwVendor::components.crud-buttons');
     }
 }

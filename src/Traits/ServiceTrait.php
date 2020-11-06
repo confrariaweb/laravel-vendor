@@ -2,7 +2,6 @@
 
 namespace ConfrariaWeb\Vendor\Traits;
 
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 
 trait ServiceTrait
@@ -84,6 +83,12 @@ trait ServiceTrait
         return $this->obj->first();
     }
 
+    public function doesntHave($relationship)
+    {
+        $this->obj = $this->obj->doesntHave($relationship);
+        return $this;
+    }
+
     function all()
     {
         if (!property_exists($this, 'obj')) {
@@ -105,7 +110,8 @@ trait ServiceTrait
             throw new RuntimeException('Missing OBJ attribute in ServiceTraitFind');
         }
         try {
-            return $this->obj->find($id);
+            $find = $this->obj->find($id);
+            return $find;
         } catch (Exception $e) {
             Log::error($e->getMessage());
         }
@@ -246,17 +252,14 @@ trait ServiceTrait
             throw new RuntimeException('Missing OBJ attribute in ServiceTraitCreate');
         }
         try {
-            //dd($this->obj);
-            //$data = $this->sometimes($data);
             $data = $this->prepareData($data);
-            $data = $this->prepareRelationships($data);
+            $this->executeBefore($data);
             $this->executeEvent($this->obj->obj, 'Saving');
             $this->executeEvent($this->obj->obj, 'Creating');
             $obj = $this->obj->create($data);
+            $this->executeAfter($data, $obj);
             $this->executeEvent($obj, 'Saved');
             $this->executeEvent($obj, 'Created');
-            //$this->executeSchedule($obj, 'Saved');
-            $this->executeSchedule($obj, 'Created');
             return $obj;
         } catch (Exception $e) {
             Log::error($e->getMessage());
@@ -293,18 +296,18 @@ trait ServiceTrait
             throw new RuntimeException('Missing OBJ attribute in ServiceTraitUpdate');
         }
         try {
-            $data = $this->sometimes($data);
-            $data = $this->prepareData($data);
-            $data = $this->prepareRelationships($data);
             $obj = $this->obj->find($id);
             if ($obj) {
+                $data = $this->prepareData($data, $obj);
+                $this->executeBefore($data);
                 $this->executeEvent($obj, 'Saving');
                 $this->executeEvent($obj, 'Updating');
                 $obj = $this->obj->update($data, $id);
+                $this->executeAfter($data, $obj);
                 $this->executeEvent($obj, 'Saved');
                 $this->executeEvent($obj, 'Updated');
-                $this->executeSchedule($obj, 'Saved');
-                $this->executeSchedule($obj, 'Updated');
+                //$this->executeSchedule($obj, 'Saved');
+                //$this->executeSchedule($obj, 'Updated');
                 return $obj;
             }
         } catch (Exception $e) {
@@ -350,21 +353,16 @@ trait ServiceTrait
             $data = $this->sometimes($data);
             $data = $this->prepareData($data);
             $updateOrCreate = $this->findBy($key_field, data_get($data, $key_field));
-
-            $data = $this->prepareRelationships($data);
-
             $attributes = [$key_field => data_get($data, $key_field)];
-
             $obj = $this->obj->updateOrCreate($attributes, $data);
-
             $this->executeEvent($obj, 'Saved');
-            $this->executeSchedule($obj, 'Saved');
+            //$this->executeSchedule($obj, 'Saved');
             if (!is_null($updateOrCreate)) {
                 $this->executeEvent($obj, 'Updated');
-                $this->executeSchedule($obj, 'Updated');
+                //$this->executeSchedule($obj, 'Updated');
             } else {
                 $this->executeEvent($obj, 'Created');
-                $this->executeSchedule($obj, 'Created');
+                //$this->executeSchedule($obj, 'Created');
             }
 
             return $obj;
@@ -412,7 +410,7 @@ trait ServiceTrait
                 $this->executeEvent($obj, 'Deleting');
                 $deleted = $obj->delete();
                 $this->executeEvent($obj, 'Deleted');
-                $this->executeSchedule($obj, 'Deleted');
+                //$this->executeSchedule($obj, 'Deleted');
                 return $obj;
             }
         } catch (Exception $e) {
@@ -439,22 +437,17 @@ trait ServiceTrait
         if (!$obj) {
             return false;
         }
-
         $event = false;
-
         $get_class = get_class($obj);
         $get_class_basename = class_basename(get_class($obj));
-
         $event = (string)'App\\Events\\' . $get_class_basename . $action . 'Event';
         if (class_exists($event)) {
             return $event;
         }
-
         $event = (string)'ConfrariaWeb\\' . $get_class_basename . '\\Events\\' . $get_class_basename . $action . 'Event';
         if (class_exists($event)) {
             return $event;
         }
-
         $explodeClass = explode('\\', $get_class);
         if (isset($explodeClass[0]) && $explodeClass[0] == 'ConfrariaWeb' && isset($explodeClass[1])) {
             $event = (string)'ConfrariaWeb\\' . $explodeClass[1] . '\\Events\\' . $get_class_basename . $action . 'Event';
@@ -462,268 +455,37 @@ trait ServiceTrait
                 return $event;
             }
         }
-
         return false;
     }
 
-    public function executeSchedule($obj, $when)
-    {
-        try {
-            if (!class_exists('ConfrariaWeb\\Schedule\\Services\\ScheduleService')) {
-                return false;
-            }
-            $where = class_basename(get_class($obj));
-            if (isset($obj) && isset($when) && isset($where)) {
-                resolve('ScheduleService')->executeService($obj, $where, $when);
-            }
-        } catch (Exception $e) {
-            Log::error($e->getMessage());
-        }
-    }
-
     /**
      * @param array $data
-     * @return |null
-     */
-    protected function prepareAddress(array $data)
-    {
-        if (isset($data) && !empty($data)) {
-            return resolve('AddressService')->prepareData($data);
-        }
-        return null;
-    }
-
-    /**
-     * @param array $data
-     * @return mixed
-     */
-    /*
-    protected function formatOptionsForRelationships(array $data)
-    {
-        return resolve('OptionService')->formatOptionsForRelationships($data);
-    }
-    */
-    /**
-     * @param array $data
-     * @return mixed
-     */
-    /*
-    protected function encodeOptions(array $data)
-    {
-        return resolve('OptionService')->encodeOptions($data);
-    }
-    */
-
-    /**
-     * @param $data
-     * @return mixed
-     */
-    protected function prepareRelationships($data)
-    {
-        /*
-        if (isset($data['sync']['options'])) {
-            $data['sync']['options'] = $data['sync']['options'];
-            //$data['sync']['options'] = $this->formatOptionsForRelationships(isset($data['sync']['options']) ? $data['sync']['options'] : []);
-        }
-        */
-        /*
-        if (isset($data['syncWithoutDetaching']['optionsValues'])) {
-            $data['syncWithoutDetaching']['optionsValues'] = $this->formatOptionsForRelationships(isset($data['syncWithoutDetaching']['optionsValues']) ? $data['syncWithoutDetaching']['optionsValues'] : []);
-        }
-        */
-        /*
-        if (isset($data['sync']['optionsValues'])) {
-            $data['sync']['optionsValues'] = $this->formatOptionsForRelationships(isset($data['sync']['optionsValues']) ? $data['sync']['optionsValues'] : []);
-        }
-        */
-
-        if (isset($data['attach']['address'])) {
-            $data['attach']['address'] = $this->prepareAddress(isset($data['attach']['address']) ? $data['attach']['address'] : []);
-        }
-
-        if (isset($data['sync']['address'])) {
-            $data['sync']['address'] = $this->prepareAddress(isset($data['sync']['address']) ? $data['sync']['address'] : []);
-        }
-
-        /*Prepare contacts*/
-        if (isset($data['syncWithoutDetaching']['contacts'])) {
-            $data['syncWithoutDetaching']['contacts'] = $this->prepareContacts($data['syncWithoutDetaching']['contacts']);
-        }
-        if (isset($data['sync']['contacts'])) {
-            $data['sync']['contacts'] = $this->prepareContacts($data['sync']['contacts']);
-        }
-        if (isset($data['attach']['contacts'])) {
-            $data['attach']['contacts'] = $this->prepareContacts($data['attach']['contacts']);
-        }
-
-        return $data;
-    }
-
-    public function prepareData(array $data)
-    {
-        return $data;
-    }
-
-    public function validateDate($date, $format = 'Y-m-d H:i:s')
-    {
-        $d = \DateTime::createFromFormat($format, $date);
-        return $d && $d->format($format) == $date;
-    }
-
-    public function sometimes($data)
-    {
-        if (isset($data) && isset($this->sometimes) && is_array($this->sometimes)) {
-            foreach ($this->sometimes as $sometimes) {
-                if (
-                    !isset($data[$sometimes]) ||
-                    empty($data[$sometimes]) ||
-                    is_null($data[$sometimes])
-                ) {
-                    unset($data[$sometimes]);
-                }
-            }
-        }
-        return $data;
-    }
-
-    public function createComment($data, $id)
-    {
-        $createComment = $this->obj->find($id);
-        $user_id = isset($createComment->user_id) ?: NULL;
-        $user_id = (Auth::check()) ? Auth::id() : $user_id;
-        $user_id = is_array($data) && isset($data['user_id']) ? $data['user_id'] : $user_id;
-        $content = is_array($data) ? $data['content'] : $data;
-        if (isset($user_id) && isset($content)) {
-            //dd($id, $user_id, $content, $createComment);
-            $comment = $createComment->comments()->create([
-                'content' => $content,
-                'user_id' => $user_id
-            ]);
-            $this->executeEvent($comment, 'Saved');
-            $this->executeSchedule($comment, 'Saved');
-            $this->executeEvent($comment, 'Created');
-            $this->executeSchedule($comment, 'Created');
-            return $comment;
-        }
-        return false;
-    }
-
-    public function datatable($data)
-    {
-        $table = $this->obj->obj->getTable();
-        $dates = $this->obj->obj->getDates();
-        $objThis = (!isset($data['trashed']) || $data['trashed'] < 1) ? $this->obj : $this->obj->onlyTrashed();
-        $draw = isset($data['draw']) ? $data['draw'] : NULL;
-        $skip = isset($data['start']) ? $data['start'] : 0;
-        $take = isset($data['length']) ? $data['length'] : 10;
-        $where = isset($data['where']) ? $data['where'] : [];
-        $orWhere = isset($data['orWhere']) ? $data['orWhere'] : [];
-        $columns = isset($data['columns']) ? $data['columns'] : NULL;
-        $order = $table . '.' . 'id';
-        $orderBy = 'asc';
-        if (isset($where)) {
-            $formatsDates = [
-                'd/m/Y H:i',
-                'd/m/Y H:i:s',
-                'Y-m-d H:i',
-                'Y-m-d H:i:s'
-            ];
-            foreach ($where as $whereDateKey => $whereDate) {
-                if (in_array($whereDateKey, $dates)) {
-                    foreach ($formatsDates as $dateFormat) {
-                        if (isset($where[$whereDateKey]) && $this->validateDate($where[$whereDateKey], $dateFormat)) {
-                            $where[$whereDateKey] = \DateTime::createFromFormat($dateFormat, $where[$whereDateKey])
-                                ->format('Y-m-d H:i:s');
-                        }
-                    }
-                }
-            }
-        }
-        if (isset($data['order']) && isset($columns[$data['order'][0]['column']]['name'])) {
-            $order = $columns[$data['order'][0]['column']]['name'];
-        }
-        if (isset($data['order'][0]['dir'])) {
-            $orderBy = $data['order'][0]['dir'];
-        }
-        if (isset($where['withoutGlobalScope'])) {
-            $objThis = $objThis->where(['withoutGlobalScope' => $where['withoutGlobalScope']]);
-        }
-        $recordsTotal = $objThis
-            ->get()
-            ->count();
-        $objThis = $objThis
-            ->where($where)
-            ->orWhere($orWhere);
-        $recordsFiltered = $objThis->get()->count();
-        $ServiceWhere = $objThis
-            ->skip($skip)
-            ->take($take)
-            ->orderBy($order, $orderBy)
-            ->get();
-        $dataResponse = [
-            "draw" => $draw,
-            "recordsTotal" => $recordsTotal,
-            "recordsFiltered" => $recordsFiltered,
-            "data" => $ServiceWhere
-        ];
-        return $dataResponse;
-    }
-
-    /**
-     * Este método prepara o array de contatos para serem salvos na tabela "contacts"
-     * Os contatos devem ser passados da controller via "sync", "syncWithoutDetaching" ou "attach", EX:
-     * $data['attach']['contacts'] = ['telefone => '55 51 9988-7766', 'email' => 'rafazingano@gmail.com']
-     * As chaves do array devem ser meios de contatos cadastrados na tabela contact_types collunn slug
-     * @param $data
+     * @param null $obj
      * @return array
      */
-    protected function prepareContacts($data, $contacts = [])
+    public function prepareData(array $data, $obj = NULL)
     {
-        if (!isset($data)) {
-            return $contacts;
-        }
-        if (isset($data['type_id']) && isset($data['content'])) {
-            $contacts[] = ['type_id' => $data['type_id'], 'content' => $data['content']];
-            return $contacts;
-        }
-        foreach ($data as $k => $v) {
-            if (isset($v['type_id']) && isset($v['content'])) {
-                $contacts[] = ['type_id' => $v['type_id'], 'content' => $v['content']];
-                continue;
-            }
-            if (is_string($k) && is_string($v)) {
-                $type = resolve('ContactTypeService')->findBy('slug', $k);
-                if ($type) {
-                    $contacts[] = ['type_id' => $type->id, 'content' => $v];
-                }
-                continue;
-            }
-            if (is_string($k) && is_array($v)) {
-                foreach ($v as $v_v) {
-                    $type = resolve('ContactTypeService')->findBy('slug', $k);
-                    if ($type) {
-                        $contacts[] = ['type_id' => $type->id, 'content' => $v_v];
-                    }
-                }
-                continue;
-            }
-        }
-        return $contacts;
+        return $data;
     }
 
-    public function createContact(array $data, int $id)
+    /**
+     * @param array $data
+     * @param null $obj
+     * @return bool
+     */
+    public function executeBefore(array $data)
     {
-        return $this->obj->createContact($data, $id);
+        return true;
     }
 
-    public function fields(array $fields = [])
+    /**
+     * @param array $data
+     * @param null $obj
+     * @return bool
+     */
+    public function executeAfter(array $data, $obj = NULL)
     {
-        foreach ($this->obj->obj->getFillable() as $field) {
-            $fields[strtolower($field)] = ucfirst($field);
-        }
-        $options = resolve('OptionService')->pluck('label', 'name');
-        $merged = $options->merge($fields);
-        return collect($merged->sort());
+        return true;
     }
 
 }

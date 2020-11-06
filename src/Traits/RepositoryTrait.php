@@ -2,8 +2,6 @@
 
 namespace ConfrariaWeb\Vendor\Traits;
 
-use ConfrariaWeb\Acl\Models\Role;
-use ConfrariaWeb\Acl\Models\Rolee;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Database\Eloquent\Builder;
@@ -16,6 +14,12 @@ trait RepositoryTrait
     protected function cacheName($name = null)
     {
         return class_basename($this->obj) . $name;
+    }
+
+    public function doesntHave($relationship)
+    {
+        $this->obj = $this->obj->doesntHave($relationship);
+        return $this;
     }
 
     public function withTrashed()
@@ -118,7 +122,8 @@ trait RepositoryTrait
             Log::error('Missing OBJ attribute in EloquentTraitFind');
             throw new RuntimeException('Missing OBJ attribute in EloquentTraitFind');
         }
-        return $this->obj->find($id);
+        $find = $this->obj->find($id);
+        return $find;
     }
 
     public function findOrFail($id)
@@ -145,27 +150,12 @@ trait RepositoryTrait
             Log::error('Missing OBJ attribute in EloquentTraitFindBy');
             throw new RuntimeException('Missing OBJ attribute in EloquentTraitFindBy');
         }
-        if (
-            !in_array($field, $this->obj->getFillable()) &&
-            !Str::contains($field, 'option.') &&
-            //!Str::contains($field, 'optionsValues.') &&
-            !Str::contains($field, 'contact.')
-        ) {
+        if (!in_array($field, $this->obj->getFillable())) {
             return false;
         }
         return $this->obj
             ->when(in_array($field, $this->obj->getFillable()), function ($query) use ($field, $value) {
                 return $query->where($this->obj->getTable() . '.' . $field, $value);
-            })
-            /*->when(Str::contains($field, 'option.'), function ($query) use ($field, $value) {
-                return $query->whereHas('optionsValues', function (Builder $query) use ($value) {
-                    $query->where('optiongables.content', $value);
-                });
-            })*/
-            ->when(Str::contains($field, 'contact.'), function ($query) use ($field, $value) {
-                return $query->whereHas('contacts', function (Builder $query) use ($value) {
-                    $query->where('contacts.content', $value);
-                });
             })
             ->first();
     }
@@ -265,96 +255,17 @@ trait RepositoryTrait
         return $this;
     }
 
-    protected function attachEloquent($obj, array $data)
-    {
-        if (!property_exists($this, 'obj')) {
-            throw new RuntimeException('Missing OBJ attribute');
-        }
-        if (isset($data['files'])) {
-            $obj->files()->createMany($data['files']);
-        }
-        if (isset($data['address'])) {
-            $data['address'] = resolve('AddressService')->prepareData($data['address']);
-            $obj->addresses()->create($data['address']);
-        }
-        if (isset($data['contacts'])) {
-            $obj->contacts()->createMany($data['contacts']);
-        }
-        if (isset($data['contact'])) {
-            $obj->contacts()->create($data['contact']);
-        }
-        if (isset($data['historic'])) {
-            $obj->historics()->create($data['historic']);
-        }
-        if (isset($data['historics'])) {
-            $obj->historics()->createMany($data['historics']);
-        }
-    }
-
-    protected function attach($obj, array $data)
+    public function attach($obj, array $data)
     {
         //
     }
 
-    protected function syncWithoutDetachingEloquent($obj, array $data)
-    {
-        if (!property_exists($this, 'obj')) {
-            throw new RuntimeException('Missing OBJ attribute');
-        }
-        /*
-        if (isset($data['optionsValues'])) {
-            $obj->optionsValues()->sync($data['optionsValues']);
-        }
-        */
-    }
-
-    protected function syncWithoutDetaching($obj, array $data)
+    public function syncWithoutDetaching($obj, array $data)
     {
         //
     }
 
-    protected function syncsEloquent($obj, array $data)
-    {
-        if (!property_exists($this, 'obj')) {
-            throw new RuntimeException('Missing OBJ attribute');
-        }
-
-        if (isset($data['address']) && isset($data['address']['city_id'])) {
-            $obj->addresses()->delete();
-            $data['address'] = resolve('AddressService')->prepareData($data['address']);
-            $obj->addresses()->create($data['address']);
-        }
-        
-        if (isset($data['users'])) {
-            $obj->users()->sync($data['users']);
-        }
-        /*
-        if (isset($data['options'])) {
-            $obj->options()->sync($data['options']);
-        }
-        */
-        /*
-        if (isset($data['optionsValues'])) {
-            $obj->optionsValues()->sync($data['optionsValues']);
-        }
-        */
-        if (isset($data['integrations'])) {
-            $obj->integrations()->attach($data['integrations']);
-        }
-
-        if (isset($data['contact'])) {
-            $obj->contacts()->delete();
-            $obj->contacts()->create($data['contact']);
-        }
-
-        if (isset($data['contacts'])) {
-            $obj->contacts()->delete();
-            $obj->contacts()->createMany($data['contacts']);
-        }
-
-    }
-
-    protected function syncs($obj, array $data)
+    public function sync($obj, array $data)
     {
         //
     }
@@ -366,42 +277,17 @@ trait RepositoryTrait
         }
 
         if (isset($data['attach'])) {
-            $this->attachEloquent($obj, $data['attach']);
             $this->attach($obj, $data['attach']);
         }
 
         if (isset($data['sync'])) {
-            $this->syncsEloquent($obj, $data['sync']);
-            $this->syncs($obj, $data['sync']);
+            $this->sync($obj, $data['sync']);
         }
 
         if (isset($data['syncWithoutDetaching'])) {
-            $this->syncWithoutDetachingEloquent($obj, $data['syncWithoutDetaching']);
             $this->syncWithoutDetaching($obj, $data['syncWithoutDetaching']);
         }
 
-    }
-
-    /**
-     * Toda a Model que extender a Trait ContactTrait pode gravar contatos
-     * passando uma matriz contendos os arrays com 'type_id' e 'content'.
-     * @param array $data = ['type_id' => 'id', 'content' => 'contact']
-     * @param $id = ID do objeto mantenedor dos contatos
-     * @return mixed
-     */
-    public function createContact(array $data, $id)
-    {
-        $create = $this->obj->find($id);
-        if (isset($data['sync']['contacts'])) {
-            return $create->contacts()->createMany($data['sync']['contacts']);
-        }
-        if (isset($data['sync']['contact'])) {
-            return $create->contacts()->create($data['sync']['contact']);
-        }
-        if (isset($data['type_id']) && isset($data['content'])) {
-            return $create->contacts()->create($data);
-        }
-        return false;
     }
 
 }
