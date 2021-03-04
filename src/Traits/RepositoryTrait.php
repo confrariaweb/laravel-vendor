@@ -148,7 +148,7 @@ trait RepositoryTrait
     {
         if (!property_exists($this, 'obj')) {
             Log::error('Missing OBJ attribute in EloquentTraitFindBy');
-            throw new RuntimeException('Missing OBJ attribute in EloquentTraitFindBy');
+            throw new \RuntimeException('Missing OBJ attribute in EloquentTraitFindBy');
         }
         if (!in_array($field, $this->obj->getFillable())) {
             return false;

@@ -2,12 +2,14 @@
 
 namespace ConfrariaWeb\Vendor\Traits;
 
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 trait ServiceTrait
 {
 
     protected $obj;
+    public $data;
 
     public function withTrashed()
     {
@@ -93,7 +95,7 @@ trait ServiceTrait
     {
         if (!property_exists($this, 'obj')) {
             Log::error('Missing OBJ attribute in ServiceTraitAll');
-            throw new RuntimeException('Missing OBJ attribute in ServiceTraitAll');
+            throw new \RuntimeException('Missing OBJ attribute in ServiceTraitAll');
         }
         try {
             return $this->obj->all();
@@ -136,11 +138,11 @@ trait ServiceTrait
     {
         if (!property_exists($this, 'obj')) {
             Log::error('Missing OBJ attribute in ServiceTraitFindBy');
-            throw new RuntimeException('Missing OBJ attribute in ServiceTraitFindBy');
+            throw new \RuntimeException('Missing OBJ attribute in ServiceTraitFindBy');
         }
         try {
             return $this->obj->findBy($field, $value);
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             Log::error($e->getMessage());
         }
         return false;
@@ -178,11 +180,11 @@ trait ServiceTrait
     {
         if (!property_exists($this, 'obj')) {
             Log::error('Missing OBJ attribute in ServiceTraitWhere');
-            throw new RuntimeException('Missing OBJ attribute in ServiceTraitWhere');
+            throw new \RuntimeException('Missing OBJ attribute in ServiceTraitWhere');
         }
         try {
             $this->obj = $this->obj->orWhere($data);
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             Log::error($e->getMessage());
         }
         return $this;
@@ -192,11 +194,11 @@ trait ServiceTrait
     {
         if (!property_exists($this, 'obj')) {
             Log::error('Missing OBJ attribute in ServiceTraitWhereIn');
-            throw new RuntimeException('Missing OBJ attribute in ServiceTraitWhereIn');
+            throw new \RuntimeException('Missing OBJ attribute in ServiceTraitWhereIn');
         }
         try {
             $this->obj = $this->obj->whereIn($column, $data);
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             Log::error($e->getMessage());
         }
         return $this;
@@ -249,22 +251,40 @@ trait ServiceTrait
     {
         if (!property_exists($this, 'obj')) {
             Log::error('Missing OBJ attribute in ServiceTraitCreate');
-            throw new RuntimeException('Missing OBJ attribute in ServiceTraitCreate');
+            throw new \RuntimeException('Missing OBJ attribute in ServiceTraitCreate');
         }
+        $return = collect([
+            'obj' => NULL,
+            'error' => FALSE,
+            'status' => 'create'
+        ]);
+        DB::beginTransaction();
         try {
-            $data = $this->prepareData($data);
-            $this->executeBefore($data);
+            $this->data = $this->prepareData($data);
+            $executeBefore = $this->executeBefore($this->data);
+            if($executeBefore->has('error') && $executeBefore->get('error')){
+                DB::rollBack();
+                $return->put('error', TRUE);
+                $return->put('status', 'Ops! Something unexpected happened');
+                return $return;
+            }
             $this->executeEvent($this->obj->obj, 'Saving');
             $this->executeEvent($this->obj->obj, 'Creating');
-            $obj = $this->obj->create($data);
-            $this->executeAfter($data, $obj);
+            $obj = $this->obj->create($this->data);
+            $executeAfter = $this->executeAfter($this->data, $obj);
+            DB::commit();
             $this->executeEvent($obj, 'Saved');
             $this->executeEvent($obj, 'Created');
-            return $obj;
+            $return->put('status', $obj->getTable() . '.create.successful');
+            $return->put('obj', $obj);
+            return $return;
         } catch (Exception $e) {
             Log::error($e->getMessage());
+            DB::rollBack();
+            $return->put('error', TRUE);
+            $return->put('status', $obj->getTable() . '.create.failed');
+            return $return;
         }
-        return false;
     }
 
     /**
@@ -293,27 +313,45 @@ trait ServiceTrait
     {
         if (!property_exists($this, 'obj')) {
             Log::error('Missing OBJ attribute in ServiceTraitUpdate');
-            throw new RuntimeException('Missing OBJ attribute in ServiceTraitUpdate');
+            throw new \RuntimeException('Missing OBJ attribute in ServiceTraitUpdate');
         }
+        $return = collect([
+            'obj' => NULL,
+            'error' => FALSE,
+            'status' => 'update'
+        ]);
+        DB::beginTransaction();
         try {
             $obj = $this->obj->find($id);
             if ($obj) {
-                $data = $this->prepareData($data, $obj);
-                $this->executeBefore($data);
+                $this->data = $this->prepareData($data, $obj);
+                $executeBefore = $this->executeBefore($this->data);
+                if($executeBefore->has('error') && $executeBefore->get('error')){
+                    DB::rollBack();
+                    $return->put('error', TRUE);
+                    $return->put('status', 'Ops! Something unexpected happened');
+                    return $return;
+                }
                 $this->executeEvent($obj, 'Saving');
                 $this->executeEvent($obj, 'Updating');
-                $obj = $this->obj->update($data, $id);
-                $this->executeAfter($data, $obj);
+                $obj = $this->obj->update($this->data, $id);
+                $this->executeAfter($this->data, $obj);
+                DB::commit();
                 $this->executeEvent($obj, 'Saved');
                 $this->executeEvent($obj, 'Updated');
                 //$this->executeSchedule($obj, 'Saved');
                 //$this->executeSchedule($obj, 'Updated');
-                return $obj;
+                $return->put('status', $obj->getTable() . '.update.successful');
+                $return->put('obj', $obj);
+                return $return;
             }
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             Log::error($e->getMessage());
+            DB::rollBack();
+            $return->put('error', TRUE);
+            $return->put('status', $obj->getTable() . '.update.failed');
+            return $return;
         }
-        return false;
     }
 
     /**
@@ -475,7 +513,9 @@ trait ServiceTrait
      */
     public function executeBefore(array $data)
     {
-        return true;
+        return collect([
+            'error' => false
+            ]);
     }
 
     /**
@@ -485,7 +525,7 @@ trait ServiceTrait
      */
     public function executeAfter(array $data, $obj = NULL)
     {
-        return true;
+        return $obj;
     }
 
 }
